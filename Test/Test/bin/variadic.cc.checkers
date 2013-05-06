@@ -1,0 +1,197 @@
+#include "boost/mpl/if.hpp"
+#include <cassert>
+
+//NOTE: Instead I could use a typed enum to denote the possible states
+enum class Abilities { kA,kB,kC};
+
+
+template<typename T>
+struct A {  
+   typedef T AType;
+   static const Abilities kAbility=Abilities::kA;
+   };
+template<typename T>
+struct B {
+   typedef T BType;
+   static const Abilities kAbility=Abilities::kB;
+};
+template<typename T>
+struct C {
+   typedef T CType;
+   static const Abilities kAbility=Abilities::kC;
+};
+
+struct Empty {};
+
+template<Abilities ABILITY, typename... VArgs> struct CheckIt;
+
+template<Abilities ABILITY, typename T, typename... VArgs>
+struct CheckIt<ABILITY,T,VArgs...> {
+   static const bool kHasIt = (T::kAbility==ABILITY) | CheckIt<ABILITY,VArgs...>::kHasIt;
+   typedef typename boost::mpl::if_c<(T::kAbility==ABILITY),
+                                     T,
+                                     typename CheckIt<ABILITY,VArgs...>::Type>::type Type;
+};
+
+template<Abilities ABILITY>
+struct CheckIt<ABILITY> {
+   static const bool kHasIt=false;
+   typedef Empty Type;
+};
+
+
+
+
+template<typename... VArgs> struct CheckC;
+
+template<typename T, typename... VArgs>
+struct CheckC<T,VArgs...> {
+   static const bool kHasC = (T::kAbility==Abilities::kC) | CheckC<VArgs...>::kHasC;
+   typedef typename boost::mpl::if_c<(T::kAbility==Abilities::kC),
+                                     T,
+                                     typename CheckC<VArgs...>::CType>::type CType;
+};
+
+template<>
+struct CheckC<> {
+   static const bool kHasC=false;
+   typedef Empty CType;
+};
+
+
+template<typename... VArgs> struct CheckB;
+
+template<typename T, typename... VArgs>
+struct CheckB<T,VArgs...> {
+   static const bool kHasB = (T::kAbility==Abilities::kB) | CheckB<VArgs...>::kHasB;
+   typedef typename boost::mpl::if_c<(T::kAbility==Abilities::kB),
+                                     T,
+                                     typename CheckB<VArgs...>::BType>::type BType;
+};
+
+template<>
+struct CheckB<> {
+   static const bool kHasB=false; 
+   typedef Empty BType;
+};
+
+template<typename... VArgs> struct CheckA;
+
+template<typename T, typename... VArgs>
+struct CheckA<T,VArgs...> {
+   static const bool kHasA = (T::kAbility==Abilities::kA) | CheckA<VArgs...>::kHasA;
+   typedef typename boost::mpl::if_c<(T::kAbility==Abilities::kA),
+                                     T,
+                                     typename CheckA<VArgs...>::AType>::type AType;
+};
+
+template<>
+struct CheckA<> {
+   static const bool kHasA=false; 
+   typedef Empty AType;
+};
+
+template <typename T, typename BASE>
+struct DoA : public BASE {
+   static const bool kDoA = true;
+};
+
+template <typename T, typename BASE>
+struct DoB : public BASE {
+   static const bool kDoB = true;
+};
+
+template <typename T, typename BASE>
+struct DoC : public BASE {
+   static const bool kDoC = true;
+};
+
+struct Base {
+   static const bool kDoA = false;
+   static const bool kDoB = false;
+   static const bool kDoC = false;
+};
+
+template<typename BASE, typename... VArgs>
+struct LookForA {
+/*   typedef typename boost::mpl::if_c<CheckA<VArgs...>::kHasA,
+                                     DoA<typename CheckA<VArgs...>::AType,
+                                         BASE>,
+                                     BASE>::type type;*/
+    typedef typename boost::mpl::if_c<CheckIt<Abilities::kA,VArgs...>::kHasIt,
+                                      DoA<typename CheckIt<Abilities::kA,VArgs...>::Type,
+                                          BASE>,
+                                      BASE>::type type;
+}; 
+
+
+template<typename BASE, typename... VArgs>
+struct LookForB {
+   /*typedef typename boost::mpl::if_c<CheckB<VArgs...>::kHasB,
+                                     DoB<typename CheckB<VArgs...>::BType,
+                                         typename LookForA<BASE,VArgs...>::type>,
+                                     typename LookForA<BASE,VArgs...>::type>::type type;*/
+
+   typedef typename boost::mpl::if_c<CheckIt<Abilities::kB,VArgs...>::kHasIt,
+                                   DoB<typename CheckIt<Abilities::kB,VArgs...>::Type,
+                                       typename LookForA<BASE,VArgs...>::type>,
+                                   typename LookForA<BASE,VArgs...>::type>::type type;
+
+}; 
+
+
+template<typename BASE, typename... VArgs>
+struct LookForC {
+   typedef typename boost::mpl::if_c<CheckIt<Abilities::kC,VArgs...>::kHasIt,
+                                     DoC<typename CheckIt<Abilities::kC,VArgs...>::Type,
+                                         typename LookForB<BASE,VArgs...>::type>,
+                                     typename LookForB<BASE,VArgs...>::type>::type type;
+}; 
+
+template<typename... VArgs>
+struct DoStuff : public LookForC<Base,VArgs...>::type {
+   
+};
+
+
+int main()
+{
+   assert(false == DoStuff<>::kDoA);
+   assert(false == DoStuff<>::kDoB);
+   assert(false == DoStuff<>::kDoC);
+
+   typedef DoStuff<A<int>> DoStuffA;
+   assert(true == DoStuffA::kDoA);
+   assert(false == DoStuffA::kDoB);
+   assert(false == DoStuffA::kDoC);
+
+   typedef DoStuff<B<int>> DoStuffB;
+   assert(false == DoStuffB::kDoA);
+   assert(true == DoStuffB::kDoB);
+   assert(false == DoStuffB::kDoC);
+
+   typedef DoStuff<C<int>> DoStuffC;
+   assert(false == DoStuffC::kDoA);
+   assert(false == DoStuffC::kDoB);
+   assert(true == DoStuffC::kDoC);
+
+   typedef DoStuff<A<int>,B<int>> DoStuffAB;
+   assert(true == DoStuffAB::kDoA);
+   assert(true == DoStuffAB::kDoB);
+   assert(false == DoStuffAB::kDoC);
+
+   typedef DoStuff<B<int>,A<int>> DoStuffBA;
+   assert(true == DoStuffBA::kDoA);
+   assert(true == DoStuffBA::kDoB);
+   assert(false == DoStuffBA::kDoC);
+
+
+   typedef DoStuff<A<int>,B<int>,C<int>> DoStuffABC;
+   assert(true == DoStuffABC::kDoA);
+   assert(true == DoStuffABC::kDoB);
+   assert(true == DoStuffABC::kDoC);
+
+
+   return 0;
+}
+                                          

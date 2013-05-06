@@ -1,0 +1,7 @@
+<bin name="testModuleAspects" file="moduleAspects.cc">
+<use name="boost_header"/>
+</bin>
+
+<bin name="testVariadic" file="variadic.cc">
+<use name="boost_header"/>
+</bin>
